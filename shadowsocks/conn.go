@@ -184,3 +184,27 @@ func (c *Conn) write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(cipherData)
 	return
 }
+
+// add by yang for gost ota
+// see https://groups.google.com/forum/#!topic/go-gost/GYBtHmLKR0o
+func DialWithRawAddrConn(rawaddr []byte, conn net.Conn, cipher *Cipher) (c *Conn, err error) {
+	c = NewConn(conn, cipher)
+	if cipher.ota {
+		if c.enc == nil {
+			if _, err = c.initEncrypt(); err != nil {
+				return
+			}
+		}
+		// since we have initEncrypt, we must send iv manually
+		conn.Write(cipher.iv)
+		rawaddr[0] |= OneTimeAuthMask
+		rawaddr = otaConnectAuth(cipher.iv, cipher.key, rawaddr)
+	}
+
+	if _, err = c.write(rawaddr); err != nil {
+		c.Close()
+		return nil, err
+	}
+	return
+}
+
